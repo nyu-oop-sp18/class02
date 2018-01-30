@@ -734,9 +734,11 @@ using case+ classes as follows:
 sealed abstract class IntOption
 case class Some(value: Int) extends IntOption
 case object None extends IntOption
-\end{lstlisting}
-We can now use the option type similarly to null values in Java:
-\begin{lstlisting}
+```
+
+We can now use the option type similarly to `null` values in Java:
+
+```scala
 def div(x: Int, y: Int): IntOption =
   if (y == 0) None else Some(x / y)
 ```
