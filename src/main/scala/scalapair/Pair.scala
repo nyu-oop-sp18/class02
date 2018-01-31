@@ -1,0 +1,5 @@
+package scalapair
+
+class Pair {
+
+}
