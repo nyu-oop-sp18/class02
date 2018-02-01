@@ -12,6 +12,9 @@ target
 .classpath
 .project
 .settings
+.cache-main
+.worksheet
 atlassian-ide-plugin.xml
 *.log.gz
 .git
+/bin/

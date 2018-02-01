@@ -352,9 +352,9 @@ case class Number(num: Int) extends Expression
 case class BinOp(op: Op, left: Expression, right: Expression) extends Expression
 /* Binary operators */
 abstract class Op
-case object Add extends Op /* + */
-case object Sub extends Op /* - */
-case object Mul extends Op /* * */
+case object Plus extends Op /* + */
+case object Minus extends Op /* - */
+case object Times extends Op /* * */
 case object Div extends Op /* / */
 ```
 
@@ -364,8 +364,8 @@ appropriate factory methods. These methods are particularly useful
 when you nest them to construct complex expressions:
 
 ```scala
-scala> val e = BinOp(Add, Number(3), BinOp(Mul, Number(4), Number(5)))
-e: BinOp = BinOp(Add, Number(3), BinOp(Mul, Number(4), Number(5))) 
+scala> val e = BinOp(Plus, Number(3), BinOp(Times, Number(4), Number(5)))
+e: BinOp = BinOp(Plus, Number(3), BinOp(Times, Number(4), Number(5))) 
 ```
 
 Second, the compiler adds natural implementations of the methods
@@ -379,10 +379,10 @@ therefore ensures that case class instances are always compared
 structurally. For example, we have:
 
 ```scala
-scala> val e1 = BinOp(Add, Number(3), Number(4))
-e1: BinOp = BinOp(Add, Number(3), Number(4))
-scala> val e2 = BinOp(Add, Number(3), Number(4))
-e2: BinOp = BinOp(Add, Number(3), Number(4))
+scala> val e1 = BinOp(Plus, Number(3), Number(4))
+e1: BinOp = BinOp(Plus, Number(3), Number(4))
+scala> val e2 = BinOp(Plus, Number(3), Number(4))
+e2: BinOp = BinOp(Plus, Number(3), Number(4))
 scala> e1 == e2
 res2: Boolean = true
 ```
@@ -398,7 +398,7 @@ same object in memory), you can use the method `eq`. For instance we have
 scala> e1 eq e2
 res3: Boolean = false
 scala> val e3 = e2
-e3: BinOp = BinOp (Add, Number(3), Number(4))
+e3: BinOp = BinOp (Plus, Number(3), Number(4))
 scala> e2 eq e3
 res4: Boolean = true
 ```
@@ -419,8 +419,8 @@ new case class object that is identical to another case class object except that
 some of its attributes are different:
 
 ```scala
-scala> e1.copy(op = Sub)
-res4: BinOp(Sub, Number(3), Number(4))
+scala> e1.copy(op = Minus)
+res4: BinOp(Minus, Number(3), Number(4))
 ```
 
 #### Pattern Matching
@@ -446,9 +446,9 @@ Let us first reformulate the three simplification rules in
 terms of our case class representation of expressions:
 
 ```scala
-  BinOp(Add, e, Number(0)) => e
-  BinOp(Mul, e, Number(1)) => e
-  BinOp(Mul, e, Number(0)) => Number(0)
+  BinOp(Plus, e, Number(0)) => e
+  BinOp(Times, e, Number(1)) => e
+  BinOp(Times, e, Number(0)) => Number(0)
 ```
 Using pattern matching, these rules almost directly give us the
 implementation of the following function `simplifyTop`, which applies
@@ -456,9 +456,9 @@ the rules at the top-level of the given expression `e`:
 
 ```scala
 def simplifyTop(e: Expression) = e match {
-  case BinOp(Add, e1, Number(0)) => e1
-  case BinOp(Mul, e1, Number(1)) => e1
-  case BinOp(Mul, _, Number(0)) => Number(0)
+  case BinOp(Plus, e1, Number(0)) => e1
+  case BinOp(Times, e1, Number(1)) => e1
+  case BinOp(Times, _, Number(0)) => Number(0)
   case _ => e
 }
 ```
@@ -484,22 +484,33 @@ Here is an example of a recursive function that uses pattern matching
 to pretty print arithmetic expressions:
 
 ```scala
-def pretty(e: Expression): String = e match {
-  case BinOp(bop, e1, e2) =>
-    val bop_str = bop match {
-      case Plus => " + "
-      case Minus => " - "
-      case Mult => " * "
-      case Div => " / "
-    }
-    "(" + pretty(e1) + bop_str + pretty(e2) + ")"
+def prec(e: Expression): Int = e match {
+  case Number(_) => 0
+  case BinOp(Times | Div, _, _) => 1
+  case BinOp(Plus | Minus, _, _) => 2
+}
+  
+def format(op: Op): String = op match {
+  case Plus => " + "
+  case Minus => " - "
+  case Times => " * "
+  case Div => " / "
+}
+  
+def format(e: Expression): String = e match {
   case Number(n) => n.toString()
+  case BinOp(op, e1, e2) =>
+    def paren(ep: Expression, e: Expression): String = {
+      if (prec(ep) < prec(e)) "(" + format(e) + ")" else format(e)
+    }
+    paren(e, e1) + format(op) + paren(e, e2)
 }
 
-scala> val e = BinOp(Add, BinOp(Mult, Number(3), Number(4)), Number(1))
-e: BinOp = BinOp(Add, BinOp(Mult, Number(3), Number(4)), Number(1))
-scala> pretty(e)
-res0: String = ((3 * 4) + 1)
+scala> val e = BinOp(Minus, BinOp(Times, Number(3), 
+                            BinOp(Plus, Number(2), Number(2))), Number(1))
+e: BinOp = BinOp(Plus, BinOp(Times, Number(3), BinOp(Plus, Number(2), Number(2))), Number(1))
+scala> format(e)
+res0: String = 3 * (2 + 2) - 1
 ```
 
 There are different types of patterns. The most important types are:
@@ -517,14 +528,16 @@ There are different types of patterns. The most important types are:
   refers to the matched value.
 
 * **Constructor patterns**: A constructor pattern such as
-  `BinOp(Add, e, Number(0))` matches all values of type
-  `BinOp` whose first argument matches `Add`,
+  `BinOp(Plus, e, Number(0))` matches all values of type
+  `BinOp` whose first argument matches `Plus`,
   whose second argument matches `e`, and whose third
   argument matches `Number(0)`. Note that the arguments to the
   constructor `BinOp` are themselves patterns. This allows
   you to write deep patterns that match complex case class values
   using a concise notation.
 
+* **Choice patterns**: A choice pattern such as `Plus | Times` matches
+  all values that match `Plus` or `Times`.
 
 #### Binding Names in Patterns
 
@@ -542,9 +555,9 @@ operator `@` as follows:
 
 ```scala
 def simplifyTop(e: Expression) = e match {
-  case BinOp(Add, e1, Number(0)) => e1
-  case BinOp(Mul, e1, Number(1)) => e1
-  case BinOp(Mul, _, e2 @ Number(0)) => e2
+  case BinOp(Plus, e1, Number(0)) => e1
+  case BinOp(Times, e1, Number(1)) => e1
+  case BinOp(Times, _, e2 @ Number(0)) => e2
   case _ => e
 }
 ```
@@ -559,7 +572,7 @@ of the rule by referring to it using the name `e2`.
 Suppose we want to extend our expression simplifier so that it
 additionally implements the following simplification rule:
 
-`e + e => 2 \times e`
+`e + e => 2 * e`
 
 If we directly translate the rule to a corresponding match
 alternative, we obtain the following implementation of `simplilfyTop`:
@@ -567,7 +580,7 @@ alternative, we obtain the following implementation of `simplilfyTop`:
 ```scala
 def simplifyTop(e: Expression) = e match {
   ...
-  case BinOp(Add, e1, e1) => BinOp(Mul, Number(2), e1)
+  case BinOp(Plus, e1, e1) => BinOp(Times, Number(2), e1)
   case _ => e
 }
 ```
@@ -584,8 +597,8 @@ are equal:
 ```scala
 def simplifyTop(e: Expression) = e match {
   ...
-  case BinOp(Add, e1, e2) if e1 == e2 => 
-    BinOp(Mul, Number(2), e2)
+  case BinOp(Plus, e1, e2) if e1 == e2 => 
+    BinOp(Times, Number(2), e2)
   case _ => e
 }
 ```
@@ -602,11 +615,11 @@ our simplification rules recursively to the given expression:
 
 ```scala
 def simplifyAll(e: Expression) = e match {
-  case BinOp(Add, e1, Number(0)) => simplifyAll(e1)
-  case BinOp(Mul, e1, Number(1)) => simplifyAll(e1)
-  case BinOp(Mul, _, e2 @ Number(0)) => e2
-  case BinOp(Add, e1, e2) if e1 == e2 => 
-    BinOp(Mul, Number(2), simplifyAll(e2))
+  case BinOp(Plus, e1, Number(0)) => simplifyAll(e1)
+  case BinOp(Times, e1, Number(1)) => simplifyAll(e1)
+  case BinOp(Times, _, e2 @ Number(0)) => e2
+  case BinOp(Plus, e1, e2) if e1 == e2 => 
+    BinOp(Times, Number(2), simplifyAll(e2))
   case BinOp(bop, e1, e2) => 
     BinOp(bop, simplifyAll(e), simplifyAll(e2))
 }
@@ -623,11 +636,11 @@ the `Number` constructor:
 
 ```scala
 def simplifyAll(e: Expression) = e match {
-  case BinOp(Add, e1, Number(0)) => simplifyAll(e1)
-  case BinOp(Mul, e1, Number(1)) => simplifyAll(e1)
-  case BinOp(Mul, _, e2 @ Number(0)) => e2
-  case BinOp(Add, e1, e2) if e1 == e2 => 
-    BinOp(Mul, Number(2), simplifyAll(e2))
+  case BinOp(Plus, e1, Number(0)) => simplifyAll(e1)
+  case BinOp(Times, e1, Number(1)) => simplifyAll(e1)
+  case BinOp(Times, _, e2 @ Number(0)) => e2
+  case BinOp(Plus, e1, e2) if e1 == e2 => 
+    BinOp(Times, Number(2), simplifyAll(e2))
   case BinOp(bop, e1, e2) => 
     BinOp(bop, simplifyAll(e), simplifyAll(e2))
   case Number(_) => e
@@ -657,10 +670,10 @@ case class Number(num: Int) extends Expression
 case class BinOp(bop: Op, left: Expression, right: Expression) extends Expression
 
 sealed abstract class Op
-case object Add extends Op
-case object Mul extends Op
+case object Plus extends Op
+case object Minus extends Op
+case object Times extends Op
 case object Div extends Op
-case object Sub extends Op
 ```
 
 Now, the code of `simplifyAll` guarantees that for every call
@@ -676,19 +689,19 @@ meant to pretty print number expressions, but not other expressions
 which have not yet been reduced:
 
 ```scala
-def prettyNumber(e: Expression): String =
+def formatNumber(e: Expression): String =
   e match {
     case Number(num) => num.toString()
   }
 ```
 Further suppose that we know that our program ensures that
-`prettyNumber` is never called on a `BinOp`
+`formatNumber` is never called on a `BinOp`
 expression. Yet, the compiler still complains about the non-exhaustive
 pattern matching. We can suppress this warning by declaring
 `e` as `unchecked`:
 
 ```scala
-def prettyNumber(e: Expression): String =
+def formatNumber(e: Expression): String =
   (e: @unchchecked) match {
     case Number(num) => num.toString()
   }
