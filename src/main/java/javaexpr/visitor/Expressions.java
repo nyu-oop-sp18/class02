@@ -1,4 +1,4 @@
-package javaexpr;
+package javaexpr.visitor;
 
 /** The Visitor class representing a generic operation on expressions */
 abstract class Visitor<T> {
