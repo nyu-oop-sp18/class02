@@ -44,10 +44,14 @@ object Expressions {
   def format(e: Expression): String = e match {
     case Number(n) => n.toString()
     case BinOp(op, e1, e2) =>
-      def paren(ep: Expression, e: Expression): String = {
-        if (prec(ep) < prec(e)) "(" + format(e) + ")" else format(e)
+      def paren(left: Boolean, ep: Expression, e: Expression): String = {
+        if (prec(ep) < prec(e) || !left && prec(ep) == prec(e)) {
+          "(" + format(e) + ")" 
+        } else {
+          format(e)
+        }
       }
-      paren(e, e1) + format(op) + paren(e, e2)
+      paren(true, e, e1) + format(op) + paren(false, e, e2)
   }
 
   /** Simplification */
